@@ -8,7 +8,9 @@ set -euo pipefail
 
 HOST="${APPNAME_HOST:?set APPNAME_HOST=user@host}"
 SSH_OPTS=()
-if [[ -n "${APPNAME_SSH_KEY:-}" ]]; then SSH_OPTS=(-i "$APPNAME_SSH_KEY"); fi
+# IdentitiesOnly: otherwise ssh offers agent keys first and the server can
+# refuse with "too many authentication failures" before reaching this one.
+if [[ -n "${APPNAME_SSH_KEY:-}" ]]; then SSH_OPTS=(-i "$APPNAME_SSH_KEY" -o IdentitiesOnly=yes); fi
 PUB="$(cat "${1:?usage: ci-setup.sh path/to/ci_key.pub}")"
 
 ssh ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} "$HOST" 'bash -s' <<REMOTE
