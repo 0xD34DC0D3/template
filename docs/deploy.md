@@ -60,15 +60,45 @@ and `aws` are already there; if not, follow voodoo's doc).
    unsigned `curl -X PUT .../api/inngest` with 401 unless
    `INNGEST_ENABLE_UNAUTHED_SYNC` is set, and appname leaves it unset.
 
-7. **Backups.** Create `/etc/appname/backup.env` (root:root 0600) from
-   `deploy/backup.env.example`. Use the same bucket as voodoo, with prefix
-   `appname/`, and the same or a new age key. The IAM policy in
-   `deploy/aws/backup-iam-policy.json` is scoped to `BUCKET_NAME/appname/*`
-   (edit the bucket name); attach it to voodoo's backup IAM user as a second
-   statement, or create a second user. Add the same lifecycle rule for the
-   `appname/` prefix (`deploy/aws/backup-lifecycle.json`; S3 holds one lifecycle
-   configuration per bucket, so merge its rules into voodoo's, do not replace
-   them). Cron, in root's crontab, offset from voodoo's:
+7. **Backups.** Use the same bucket as voodoo, with prefix `appname/`, and the
+   same or a new age key. If you create a new bucket instead, follow voodoo's
+   off-box setup, including blocking public access:
+   ```sh
+   aws s3api put-public-access-block --bucket BUCKET_NAME \
+     --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+   ```
+   The IAM policy in `deploy/aws/backup-iam-policy.json` is scoped to
+   `BUCKET_NAME/appname/*` (edit the bucket name); attach it to voodoo's backup
+   IAM user as a second statement, or create a second user.
+
+   Lifecycle rules for the `appname/` prefix are in
+   `deploy/aws/backup-lifecycle.json`. S3 allows one lifecycle configuration
+   per bucket, and `put-bucket-lifecycle-configuration` replaces it whole, so
+   putting this file on the shared bucket would delete voodoo's rules (and
+   any other app's). Merge instead:
+   ```sh
+   aws s3api get-bucket-lifecycle-configuration --bucket BUCKET_NAME > lifecycle-current.json
+   jq --slurpfile app deploy/aws/backup-lifecycle.json \
+     '{Rules: ([.Rules[] | select(.Filter.Prefix != "appname/")] + $app[0].Rules)}' \
+     lifecycle-current.json > lifecycle-merged.json
+   aws s3api put-bucket-lifecycle-configuration --bucket BUCKET_NAME \
+     --lifecycle-configuration file://lifecycle-merged.json
+   ```
+   The `jq` keeps every other app's rules and swaps in this app's, so it is
+   safe to re-run. If the `get` fails with `NoSuchLifecycleConfiguration`, the
+   bucket has no rules yet: put the file directly. Keep rule IDs prefixed
+   with the app name (`expire-appname-backups`) so apps' rules never clash.
+
+   Write `/etc/appname/backup.env` from `deploy/backup.env.example` through a
+   temp file (root:root 0600) and `mv` it into place, now and on every later
+   edit: a CI deploy runs the backup script before installing, and a
+   half-written `backup.env` fails the backup and with it the deploy.
+   ```sh
+   install -m 0600 -o root -g root /dev/null /etc/appname/backup.env.new
+   # fill in backup.env.new, then:
+   mv /etc/appname/backup.env.new /etc/appname/backup.env
+   ```
+   Cron, in root's crontab, offset from voodoo's:
    ```
    30 4 * * * /usr/local/bin/appname-backup
    ```
