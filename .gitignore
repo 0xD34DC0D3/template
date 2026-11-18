@@ -12,10 +12,27 @@ coverage.*
 *.db-shm
 *.db-wal
 
-# Local config
+# Local config and secrets
 .env
 .env.*
+*.env
 !.env.example
+!deploy/*.env.example
+*.key
+*.pem
+*.age
+ci_key*
+id_ed25519*
+id_rsa*
+id_ecdsa*
+key.txt
+
+# Backups and restore leftovers (docs/deploy.md)
+*.db.gz
+*.db.broken
+
+# CI release staging (ci.yml)
+stage/
 
 # Editor / OS
 .DS_Store

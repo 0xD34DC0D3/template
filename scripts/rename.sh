@@ -57,5 +57,8 @@ mv deploy/appname.env.example "deploy/$name.env.example"
 # Module zips (so gonew) drop file modes.
 chmod +x deploy/*.sh scripts/*.sh
 rm -f -- "$self" scripts/try-gonew.sh
+# LICENSE has no placeholder on purpose: MIT asks copies to keep the
+# template's copyright line, so the new app adds its own beside it by hand.
 echo "renamed to $name${port:+ (port $port)}. Left to do by hand: README.md, docs/design.md,"
-echo "LICENSE holder, the backup cron time in docs/deploy.md, and the EXAMPLE code."
+echo "your copyright line in LICENSE (keep the existing one), the backup cron time in"
+echo "docs/deploy.md, and the EXAMPLE code."

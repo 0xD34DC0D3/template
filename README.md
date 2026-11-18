@@ -35,13 +35,15 @@ path; with PORT it also replaces the default port 8081.
 
 Then, by hand:
 
-- README.md, the top of docs/design.md, the LICENSE holder.
+- README.md, the top of docs/design.md, and your copyright line in LICENSE
+  (add it; keep the template's, which MIT asks copies to retain).
 - The backup cron time in docs/deploy.md (offset it from the other apps').
 - Delete the EXAMPLE code (list in AGENTS.md) as the real code replaces it.
   Before the first production deploy, delete `migrations/00001_example_notes.sql`
   and its queries outright; after it, drop the table in a new migration.
 
-Until the template is on GitHub, use `scripts/try-gonew.sh` (below).
+To try this from a local checkout without publishing, use
+`scripts/try-gonew.sh` (below).
 
 ## Run
 
@@ -63,6 +65,20 @@ file-based `GOPROXY`, runs gonew (module `example.com/NAME`), links
 `OUTDIR/voodoo` to the sibling voodoo, and runs `rename.sh`. Then run the CI
 steps (`.github/workflows/ci.yml`) in `OUTDIR/NAME`.
 
+## Theme
+
+`internal/web/static/theme.css` is generated from the org website's design
+tokens and committed. `make theme` (`scripts/sync-theme.sh`) regenerates it
+and needs the [website](https://github.com/0xD34DC0D3/website) repo checked
+out beside this one (`../website`, or `make theme WEBSITE=path`); without it, treat
+theme.css as an ordinary committed file.
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE), except these third-party files:
+
+- `internal/web/static/htmx.min.js`: [htmx](https://htmx.org), 0BSD; the
+  version and sha256 are in `internal/web/web.go`.
+- `internal/web/static/fonts/*.woff2`: Atkinson Hyperlegible Next and
+  JetBrains Mono, SIL Open Font License 1.1
+  (`internal/web/static/fonts/OFL.txt`).

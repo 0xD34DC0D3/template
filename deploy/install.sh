@@ -5,6 +5,11 @@ set -euo pipefail
 BIN=/usr/local/bin/appname
 ROLLBACK="install -m 0755 $BIN.prev $BIN && systemctl restart appname"
 
+# CI pipes this script's output into a public Actions log, so failure detail
+# that can name hosts, addresses or buckets goes to the journal (tag
+# appname-install) and the log only says where to look.
+journal() { logger -t appname-install -p user.err -- "$1" 2>/dev/null || true; }
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 tar -xzf - -C "$work" --no-same-owner --no-same-permissions appname backup.sh appname.service
@@ -51,14 +56,18 @@ fi
 
 # doctor needs the migrated schema, so it runs after migrate. In prod it also
 # requires voodoo's /healthz to answer.
+# Its errors can carry voodoo's resolved address, so they go to the journal.
 echo ">> doctor (new binary, production config)"
-if ! sudo -u appname --preserve-env="$env_vars" "$BIN.new" doctor; then
+if ! doctor_out="$(sudo -u appname --preserve-env="$env_vars" "$BIN.new" doctor 2>&1)"; then
+	journal "doctor failed: $doctor_out"
 	rm -f "$BIN.new"
 	restart_old
-	echo "!! doctor failed; old binary restarted (if any). Fix the config or voodoo," >&2
+	echo "!! doctor failed; old binary restarted (if any). Details: run" >&2
+	echo "!! 'journalctl -t appname-install' on the server. Fix the config or voodoo," >&2
 	echo "!! then redeploy. The migration above was already applied." >&2
 	exit 1
 fi
+printf '%s\n' "$doctor_out"
 
 echo ">> installing (previous binary kept as $BIN.prev)"
 if [[ -f "$BIN" ]]; then cp -p "$BIN" "$BIN.prev"; fi
@@ -82,8 +91,9 @@ for _ in $(seq 10); do
 	fi
 	sleep 1
 done
-systemctl --no-pager --lines=20 status appname || true
-echo "!! health check failed. Roll back the binary with:" >&2
+# The service's own log is production data; it stays on the server.
+echo "!! health check failed; run 'journalctl -u appname' on the server." >&2
+echo "!! Roll back the binary with:" >&2
 echo "!!   $ROLLBACK" >&2
 echo "!! Migrations are not reversed; see docs/deploy.md for restoring the backup." >&2
 exit 1

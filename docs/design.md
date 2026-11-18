@@ -33,7 +33,8 @@ sections (features, data, jobs) below. Keep the rest.
 - Inngest client, `/api/inngest`, `jobs/`.
   Inngest env vars keep the SDK's names (`INNGEST_*`), not `APPNAME_`, since the SDK reads them itself; prod requires both keys and refuses `INNGEST_DEV`. `/api/inngest` skips CSRF and voodoo auth (signature-authenticated) and caps bodies at 36 MiB (Inngest's 32 MiB run-state limit plus headroom) instead of 64 KB. Steps return small values (ids, counts): each Inngest call must finish inside `serve`'s 30 s write timeout and arrive inside its 10 s read timeout.
 - Pinned tools, CI, govulncheck, `deploy.sh`, `backup.sh`, Caddyfile, systemd.
-  Deploy diverges from voodoo's in four ways: `install.sh` runs `appname doctor` (new binary, prod env) after `migrate up` and before installing it; the health check accepts any 2xx because `/healthz` has an empty body; `ci-setup.sh` makes user `deploy-appname` (not `deploy`) so it does not overwrite voodoo's CI key on the shared droplet; the systemd unit leaves outbound HTTPS open (voodoo, Inngest Cloud). The CI deploy job stays dormant until the repository variable `DEPLOY_HOST` is set. CI checks out voodoo's `main` beside the app for the `../voodoo` replace (see Known issues). `install.sh` reminds the operator to re-sync the Inngest app, which is manual.
+  Deploy diverges from voodoo's in four ways: `install.sh` runs `appname doctor` (new binary, prod env) after `migrate up` and before installing it; the health check accepts any 2xx because `/healthz` has an empty body; `ci-setup.sh` makes user `deploy-appname` (not `deploy`) so it does not overwrite voodoo's CI key on the shared droplet; the systemd unit leaves outbound HTTPS open (voodoo, Inngest Cloud). The CI deploy job stays dormant until the repository variable `DEPLOY_ENABLED` is `true`. CI checks out voodoo's `main` beside the app for the `../voodoo` replace (see Known issues). `install.sh` reminds the operator to re-sync the Inngest app, which is manual.
+- Deploy output is public (Actions logs of a public repo), so it must not show the SSH user or port, sshd's banner, production logs (journal output), the backup bucket's name or the healthcheck URL. The server's IP is public anyway through the app's DNS A record, so masking it is only defence in depth. The SSH host and known_hosts are environment secrets, not variables (a step's env block prints variables in clear; job-level `if` cannot read secrets, hence the separate `DEPLOY_ENABLED` variable), and the deploy step `::add-mask::`s the bare host and each known_hosts entry and host name, which whole-secret masking misses. On the server, `install.sh` sends doctor's failure output (it can carry voodoo's resolved address) to the journal (`logger -t appname-install`) and answers a failed health check with "run journalctl -u appname" instead of `systemctl status`; `backup.sh` runs `age`, `aws` and the healthcheck `curl` through `quiet`, which logs their stderr to the journal (`-t appname-backup`) and prints a generic line. Exit codes are unchanged, and so is what a successful deploy prints. voodoo's deploy does the same.
 - `AGENTS.md`, `docs/design.md`, `docs/deploy.md`.
 
 CI also checks: sqlc output is current, `queries.sql` is ASCII-only (see `sqlc.yaml`), migrations run up, down, up.
@@ -43,6 +44,10 @@ Out: Antfly, MCP, GraphQL, anything app-specific.
 ## Examples
 
 One of each, marked EXAMPLE, deleted by a new app: migration `00001_example_notes.sql` and its queries, the notes page (full page plus htmx fragment, plain-form fallback, validation error inside the fragment), the admin page, the `appname/example.ping` event function and the hourly notes-count cron, their nav links in `layout.html`, and their tests. Once production has applied `00001`, drop the table with a new migration instead of deleting the file.
+
+## License
+
+MIT. The copyright line names the authors of the code the template came from (`0x devs`, as in scry's LICENSE), and renaming the template left it alone: MIT asks copies to keep the notice, so a new app keeps that line and adds its own above it.
 
 ## Deferred
 
@@ -62,4 +67,4 @@ One of each, marked EXAMPLE, deleted by a new app: migration `00001_example_note
 - Error pages from voodooauth's `RequireUser` / `RequireAdmin` (401/403/503) are voodoo's plain responses, not the layout.
 - `web.StaticHandler` serves a directory listing at `/static/`, and a missing static file is a text/plain 404 cached `public, max-age=3600`.
 - Pages set no Cache-Control unless the handler does. Pages that need auth send no validators, so nothing caches them in practice; a public page must set its own policy and `Vary: Cookie, Authorization` if it names the user.
-- Apps sharing a droplet need distinct ports. The template's default is scry's; pick another when renaming (README).
+- Apps sharing a droplet need distinct ports. This app's port was set when the template was renamed; moving it means changing it in the env examples, the Caddyfile and the docs.

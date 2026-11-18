@@ -12,8 +12,7 @@ Internet ──▶ Caddy (:443) ──▶ appname (127.0.0.1:8081, systemd) ─�
 Inngest Cloud ──▶ Caddy ──▶ appname /api/inngest   (signed requests)
 ```
 
-Placeholders: `appname.example.com` (appname's host; `appname.0xd34dc0d3.dev` in
-production), `auth.example.com` (voodoo's host), `<server-ip>`,
+Placeholders: `appname.example.com` (appname's host), `auth.example.com` (voodoo's host), `<server-ip>`,
 `root@your-server`, `BUCKET_NAME`.
 
 ## First-time server setup
@@ -133,24 +132,54 @@ restore the backup taken at the start of the deploy (newest file in
 
 ### Deploying from CI
 
-The `deploy` job in `.github/workflows/ci.yml` mirrors voodoo's. Because
+The `deploy` job in `.github/workflows/ci.yml` mirrors voodoo's, including
+what it keeps out of the public log (below). Because
 `go.mod` replaces voodoo with `../voodoo`, CI checks out voodoo's `main` beside
 appname and builds against it (see Known issues in [design.md](design.md)).
 CI never uploads `install.sh`; changes to it reach the server only through
 `make deploy`. One-time setup, after one `make deploy` so `appname-install` exists:
 
 ```sh
-ssh-keygen -t ed25519 -N "" -C appname-ci -f ci_key
-APPNAME_HOST=root@your-server deploy/ci-setup.sh ci_key.pub
-gh secret set DEPLOY_SSH_KEY --env production < ci_key
-gh variable set DEPLOY_HOST --body deploy-appname@your-server
-gh variable set DEPLOY_KNOWN_HOSTS --env production --body "$(ssh-keyscan -t ed25519 your-server)"
-rm ci_key ci_key.pub
+# A throwaway directory, so the private key never sits in the checkout.
+keydir="$(mktemp -d)"
+ssh-keygen -t ed25519 -N "" -C appname-ci -f "$keydir/ci_key"
+APPNAME_HOST=root@your-server deploy/ci-setup.sh "$keydir/ci_key.pub"
+gh secret set DEPLOY_SSH_KEY --env production < "$keydir/ci_key"
+gh secret set DEPLOY_HOST --env production --body deploy-appname@your-server
+gh secret set DEPLOY_KNOWN_HOSTS --env production --body "$(ssh-keyscan -t ed25519 your-server 2>/dev/null | grep -v '^#')"
+gh variable set DEPLOY_ENABLED --body true
+rm -rf "$keydir"
 ```
 
-`DEPLOY_HOST` is a repository variable, not an environment one: the deploy
+Then let only `main` use the `production` environment. Without this, anyone
+with write access could push a branch whose own `ci.yml` runs a job in
+`production` and reads its secrets, SSH key included; with it, only `main` can
+(replace OWNER/REPO):
+
+```sh
+gh api -X PUT repos/OWNER/REPO/environments/production --input - <<'EOF'
+{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+EOF
+gh api -X POST repos/OWNER/REPO/environments/production/deployment-branch-policies -f name=main -f type=branch
+```
+
+Also protect `main` (require pull requests, block force pushes), so getting
+code onto it takes more than write access.
+
+The host and known_hosts are secrets, not variables, because the step's env
+block prints variables in clear; the deploy step also masks the bare host and
+each known_hosts entry, so the public log does not show the SSH user or port.
+This does not hide the server's IP, which the app's DNS A record makes public
+anyway; masking it is only defence in depth.
+`DEPLOY_ENABLED` is a repository variable, not an environment one: the deploy
 job's `if` reads it to stay dormant until it is set, and a job-level `if`
-cannot see environment variables.
+cannot see environment variables or secrets.
+
+The deploy's output is public too, so `install.sh` and `backup.sh` print only
+a short line when doctor, the health check, `age`, `aws` or the healthcheck
+ping fails; the detail is in the server's journal
+(`journalctl -t appname-install`, `journalctl -t appname-backup`,
+`journalctl -u appname`).
 
 CI connects as `deploy-appname`, not voodoo's `deploy`, so the two keys do not
 overwrite each other. Revoke by deleting `/home/deploy-appname/.ssh/authorized_keys`.
