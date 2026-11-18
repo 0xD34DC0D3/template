@@ -50,6 +50,9 @@ if [ -n "$port" ]; then
 		done
 fi
 
+# The template-maintenance rule in AGENTS.md is false once renamed.
+perl -ni -e 'print unless /^- Template changes:/' AGENTS.md
+
 mv cmd/appname "cmd/$name"
 mv deploy/appname.service "deploy/$name.service"
 mv deploy/appname.env.example "deploy/$name.env.example"
