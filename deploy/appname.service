@@ -1,0 +1,60 @@
+[Unit]
+Description=appname
+Documentation=https://github.com/0xD34DC0D3/appname
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appname
+Group=appname
+EnvironmentFile=/etc/appname/appname.env
+ExecStart=/usr/local/bin/appname serve
+Restart=on-failure
+RestartSec=2s
+
+# The DB lives here; everything else is read-only to the service.
+StateDirectory=appname
+ReadWritePaths=/var/lib/appname
+
+# The DB holds every user's subscriptions and reading history, so it stays
+# private. systemd's defaults would create the state directory 0755 and the
+# database (plus -wal/-shm) 0644, readable by the other service accounts on
+# this box. Setting these here rather than by hand matters: StateDirectory=
+# re-applies StateDirectoryMode on every start, so a manual chmod gets
+# reverted.
+UMask=0077
+StateDirectoryMode=0700
+
+# Hardening: appname is a single static binary that listens on a port, writes its
+# SQLite file and makes outbound HTTPS. Lock down the rest.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# Blast-radius reduction for code execution inside this process. It accepts
+# TCP from Caddy on loopback (including Inngest Cloud's calls to
+# /api/inngest). Outbound, it calls voodoo and talks to Inngest Cloud over
+# HTTPS, so INET/INET6 stay open and there is no egress filter here; an app
+# that fetches user-supplied URLs must refuse private addresses itself.
+# AF_UNIX is for journald. No raw/packet/netlink sockets.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Hide other processes from appname's /proc (does not hide appname from others).
+ProtectProc=invisible
+# ProtectClock also matters for correctness: a clock moved backwards would
+# skew job schedules and the validity of voodoo's session cookies.
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

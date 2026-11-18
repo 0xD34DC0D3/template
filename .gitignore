@@ -1,0 +1,25 @@
+# Build artifacts
+/bin/
+
+# Test / coverage
+*.test
+*.out
+coverage.*
+
+# SQLite
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.claude/

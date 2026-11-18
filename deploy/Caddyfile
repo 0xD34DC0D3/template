@@ -1,0 +1,26 @@
+# Caddy terminates TLS and proxies to appname on localhost.
+# appname.example.com is a placeholder: use your appname host.
+# Once the host's DNS record points straight at this server (not through a
+# CDN proxy), Caddy obtains and renews a Let's Encrypt certificate on its own.
+#
+# This is appname's site block only. The server's /etc/caddy/Caddyfile also
+# serves voodoo (and possibly other sites): add or edit this block in place
+# rather than copying the file over it. After any change:
+#
+#   cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak
+#   caddy validate --config /etc/caddy/Caddyfile
+#   systemctl reload caddy
+#
+# Reload, never restart: a failed reload keeps the running config serving, a
+# restart with a broken file takes every site on the box down.
+appname.example.com {
+	encode gzip
+
+	# No plaintext requests, ever. No "preload" and no includeSubDomains: those
+	# are apex-domain commitments and effectively irreversible.
+	header Strict-Transport-Security "max-age=31536000"
+
+	# Inngest Cloud calls /api/inngest through this same proxy (bodies up to
+	# 36 MiB), so no request_body limit here; appname caps bodies itself.
+	reverse_proxy 127.0.0.1:8081
+}

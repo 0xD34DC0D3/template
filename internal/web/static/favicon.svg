@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="0x">
+  <!-- the org's favicon tile: accent square, ink border -->
+  <rect x="3" y="3" width="58" height="58" rx="2" fill="#d2ff3a" stroke="#0b0b0b" stroke-width="6"/>
+  <path d="M20 22 L44 42 M44 22 L20 42" fill="none" stroke="#0b0b0b" stroke-width="6" stroke-linecap="square"/>
+</svg>

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # go.mod replaces voodoo with ../voodoo, so both repos are checked out side
+    # by side (docs/design.md, Known issues).
+    defaults:
+      run:
+        working-directory: appname
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          path: appname
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: 0xD34DC0D3/voodoo
+          path: voodoo
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: appname/go.mod
+          cache-dependency-path: appname/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Install tools
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(make -s print-SQLC_VERSION)
+          go install github.com/pressly/goose/v3/cmd/goose@$(make -s print-GOOSE_VERSION)
+          go install golang.org/x/vuln/cmd/govulncheck@$(make -s print-GOVULNCHECK_VERSION)
+
+      - name: sqlc generate is up to date
+        run: |
+          make sqlc
+          if [ -n "$(git status --porcelain -- internal/db)" ]; then
+            git status --short -- internal/db
+            git diff -- internal/db
+            echo "generated code is stale; run 'make sqlc' and commit"; exit 1
+          fi
+
+      - name: migrations run up, down, up
+        run: make migrate-check
+
+      - name: govulncheck
+        run: ./deploy/vulncheck.sh
+
+  deploy:
+    needs: test
+    # Dormant until DEPLOY_HOST is set (docs/deploy.md), so a fresh copy of the
+    # template does not fail every push to main.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: appname
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          path: appname
+          persist-credentials: false
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: 0xD34DC0D3/voodoo
+          path: voodoo
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: appname/go.mod
+          cache: false
+
+      - name: Build release
+        run: |
+          mkdir stage
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o stage/appname ./cmd/appname
+          cp deploy/backup.sh deploy/appname.service stage/
+
+      - name: Deploy
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 0600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          tar -czf - -C stage appname backup.sh appname.service |
+            ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$HOST"

@@ -1,0 +1,18 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-appname-backups",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "appname/" },
+      "Expiration": { "Days": 30 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 30 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    },
+    {
+      "ID": "clean-appname-expired-delete-markers",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "appname/" },
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    }
+  ]
+}

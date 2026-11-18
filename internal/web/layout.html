@@ -1,0 +1,66 @@
+{{define "top"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · {{.App}}</title>
+  {{- /* htmx, see web.go: includeIndicatorStyles=false because htmx would
+         otherwise inject an inline <style> that the CSP (no style-src
+         'unsafe-inline') blocks; allowEval=false because eval is blocked too. */}}
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
+  <link rel="icon" href="/static/favicon.svg?v={{.Ver}}" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/atkinson-hyperlegible-next-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/theme.css?v={{.Ver}}">
+  <link rel="stylesheet" href="/static/style.css?v={{.Ver}}">
+  <script src="/static/htmx.min.js?v={{.Ver}}" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header>
+    <div class="brand">
+      <a class="org" href="{{.SiteURL}}/" aria-label="deadcode home"><span class="tile" aria-hidden="true">0x</span></a>
+      <span class="sep" aria-hidden="true">/</span>
+      <a class="app" href="/">{{.App}}</a>
+    </div>
+    {{- /* EXAMPLE links: one per top-level page. A handler names its link
+           with web.View.Nav. */}}
+    <nav aria-label="Main">
+      <a href="/"{{with .Current "notes"}} aria-current="{{.}}"{{end}}>notes</a>
+      {{- if and .User .User.IsAdmin}}
+      <a href="/admin"{{with .Current "admin"}} aria-current="{{.}}"{{end}}>admin</a>
+      {{- end}}
+    </nav>
+    <div class="who">
+      {{- with .User}}
+      <span>{{.Email}}</span>
+      {{- /* Posts straight to voodoo, which accepts logout from sibling hosts
+             and ends the session for every app. */}}
+      <form method="post" action="{{$.LogoutURL}}">
+        <button class="ghost" type="submit">sign out</button>
+      </form>
+      {{- else}}
+      <a href="{{.LoginURL}}">sign in</a>
+      {{- end}}
+    </div>
+  </header>
+  <main id="main"{{if .Wide}} class="wide"{{end}}>
+{{end}}
+
+{{define "bottom"}}
+  </main>
+  <footer>
+    <span><a href="{{.SiteURL}}/">deadcode</a> · <a href="{{.SiteURL}}/#apps">all apps</a></span>
+    <span><span class="hex">0xD34DC0D3</span> · {{.App}}</span>
+  </footer>
+</body>
+</html>
+{{end}}
+
+{{/* The error page (Renderer.Error): .Title is the status text, .Data the
+     message. */}}
+{{define "error"}}{{template "top" .}}
+<h1>{{.Title}}</h1>
+<p>{{.Data}}</p>
+<p><a href="/">Back to {{.App}}</a></p>
+{{template "bottom" .}}{{end}}

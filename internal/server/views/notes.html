@@ -1,0 +1,43 @@
+{{/* EXAMPLE page (a new app deletes it). "notes" is the full page;
+     "notes-panel" is the fragment an htmx request gets back, and includes the
+     form so the input is cleared after a post without any inline script. */}}
+{{define "notes"}}{{template "top" .}}
+<h1>Notes</h1>
+<p class="note">EXAMPLE: rows from the template's <code>notes</code> table.</p>
+{{if and .User .User.IsAdmin}}
+<form method="post" action="/example/ping" hx-post="/example/ping" hx-target="#ping-status" hx-disabled-elt="find button">
+  <button type="submit">Send appname/example.ping</button>
+  <span id="ping-status" class="note">Its job adds a note.</span>
+</form>
+{{end}}
+{{template "notes-panel" .}}
+{{template "bottom" .}}{{end}}
+
+{{define "notes-panel"}}<div id="notes-panel">
+  {{if .User}}
+  <form method="post" action="/notes" hx-post="/notes" hx-target="#notes-panel" hx-swap="outerHTML" hx-disabled-elt="find button">
+    <div class="form-row">
+      <label>
+        <span>New note</span>
+        <input name="body" required maxlength="500" autocomplete="off" value="{{.Data.Body}}"{{if .Data.Err}} aria-invalid="true" aria-describedby="note-error"{{end}}>
+      </label>
+      <button type="submit">Add</button>
+    </div>
+    {{with .Data.Err}}<p id="note-error" class="error" role="alert">{{.}}</p>{{end}}
+  </form>
+  {{else}}
+  <p class="note"><a href="{{.LoginURL}}">Sign in</a> to add a note.</p>
+  {{end}}
+  {{with .Data.Notes}}
+  <ul class="notes">
+    {{range .}}<li>{{.Body}} <span class="dim">{{.Created}} UTC</span></li>{{end}}
+  </ul>
+  {{else}}
+  <p class="empty">No notes yet.</p>
+  {{end}}
+</div>{{end}}
+
+
+{{/* Swapped into #ping-status. The job runs asynchronously, so this reloads
+     the list once it has had time to finish. */}}
+{{define "ping-sent"}}<span hx-get="/" hx-trigger="load delay:2s" hx-target="#notes-panel" hx-swap="outerHTML">Sent; the list refreshes in 2 s.</span>{{end}}

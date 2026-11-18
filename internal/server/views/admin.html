@@ -1,0 +1,6 @@
+{{/* EXAMPLE admin-only page (a new app deletes it). */}}
+{{define "admin"}}{{template "top" .}}
+<h1>Admin</h1>
+<p class="note">EXAMPLE: only voodoo admins reach this page; everyone else gets 403.</p>
+<p>Signed in as {{.Data.Email}}.</p>
+{{template "bottom" .}}{{end}}

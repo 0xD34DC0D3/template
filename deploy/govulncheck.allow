@@ -1,0 +1,2 @@
+# govulncheck findings accepted for now, one per line: ID, then the reason.
+# Remove a line as soon as a fixed release exists; upgrade instead.
